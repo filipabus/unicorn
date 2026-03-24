@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="no" style="touch-action:manipulation">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Enhjørningi">
+<title>Enhjørningi 🦄</title>
+<style>
+/* ===== Reset & Base ===== */
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;font-family:system-ui,-apple-system,sans-serif;
+  -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;
+  touch-action:manipulation}
+body{background:linear-gradient(180deg,#E0CCFA 0%,#D5F5E8 100%);
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+
+/* ===== CSS Custom Properties ===== */
+:root{
+  --cell-size:min(20vw,28vh);
+  --cloud-color-1:#FFB6D9;
+  --cloud-color-2:#D4A5F5;
+  --cloud-color-3:#A5D4F5;
+  --hud-bg:rgba(0,0,0,0.25);
+  --btn-radius:16px;
+}
+
+/* ===== Game Frame ===== */
+#game-frame{position:absolute;inset:0;display:none;flex-direction:column}
+#game-frame.active{display:flex}
+
+/* ===== HUD ===== */
+#hud{display:flex;align-items:center;justify-content:space-between;
+  padding:6px 12px;z-index:20;gap:8px;pointer-events:none;position:relative}
+.hud-pill{background:var(--hud-bg);color:#fff;font-size:14px;font-weight:700;
+  padding:4px 14px;border-radius:20px;white-space:nowrap;pointer-events:auto}
+#streak-display{color:#FFD700;min-width:80px;text-align:center}
+#quit-btn{background:rgba(0,0,0,0.35);color:#fff;font-size:18px;font-weight:700;
+  border:none;border-radius:50%;width:34px;height:34px;cursor:pointer;pointer-events:auto;
+  display:flex;align-items:center;justify-content:center;line-height:1}
+#mute-btn{background:rgba(0,0,0,0.35);color:#fff;font-size:16px;
+  border:none;border-radius:50%;width:34px;height:34px;cursor:pointer;pointer-events:auto;
+  display:flex;align-items:center;justify-content:center}
+
+/* ===== Cloud Grid ===== */
+#cloud-grid{flex:1;display:grid;align-content:center;justify-content:center;
+  gap:min(3vw,4vh);padding:0 4vw;z-index:10;position:relative}
+#cloud-grid.grid-3x2{grid-template-columns:repeat(3,var(--cell-size));grid-template-rows:repeat(2,var(--cell-size))}
+#cloud-grid.grid-4x3{grid-template-columns:repeat(4,calc(var(--cell-size)*0.8));grid-template-rows:repeat(3,calc(var(--cell-size)*0.75))}
+
+/* ===== Cloud Hole ===== */
+.cloud-hole{position:relative;width:100%;height:100%}
+.cloud-base{position:absolute;bottom:0;left:5%;width:90%;height:55%;
+  background:linear-gradient(135deg,var(--cloud-color-1),var(--cloud-color-2),var(--cloud-color-3));
+  border-radius:0 0 30% 30%/0 0 50% 50%;overflow:visible;
+  clip-path:inset(-120% -10% 0% -10%);z-index:2}
+.cloud-top{position:absolute;bottom:42%;left:0;width:100%;height:50%;z-index:3;pointer-events:none}
+.cloud-top::before,.cloud-top::after,.cloud-top span{position:absolute;
+  background:linear-gradient(135deg,var(--cloud-color-1),var(--cloud-color-2),var(--cloud-color-3));
+  border-radius:50%;content:''}
+.cloud-top::before{width:50%;height:90%;left:8%;bottom:0}
+.cloud-top::after{width:45%;height:80%;right:8%;bottom:0}
+.cloud-top span{width:40%;height:100%;left:30%;bottom:10%}
+
+/* ===== Unicorn Wrapper ===== */
+.unicorn-wrap{position:absolute;bottom:0;left:50%;width:80%;height:130%;
+  transform:translate(-50%,115%);transition:none;will-change:transform;pointer-events:none}
+.unicorn-wrap.appearing{animation:unicorn-appear 0.5s cubic-bezier(0.34,1.56,0.64,1) forwards;pointer-events:auto}
+.unicorn-wrap.visible{transform:translate(-50%,0%);pointer-events:auto}
+.unicorn-wrap.hiding{transform:translate(-50%,115%);transition:transform 0.3s ease-in;pointer-events:none}
+.unicorn-wrap.tapped{animation:joyBounce 0.4s ease-out}
+.unicorn-wrap svg{width:100%;height:100%}
+
+/* ===== Unicorn Animations ===== */
+@keyframes unicorn-appear{
+  0%{transform:translate(-50%,115%)}
+  60%{transform:translate(-50%,-15%)}
+  75%{transform:translate(-50%,5%)}
+  85%{transform:translate(-50%,-3%)}
+  100%{transform:translate(-50%,0%)}
+}
+@keyframes joyBounce{
+  0%{transform:translate(-50%,0%) scale(1)}
+  30%{transform:translate(-50%,-6%) scale(1.18)}
+  60%{transform:translate(-50%,0%) scale(1.06)}
+  100%{transform:translate(-50%,0%) scale(1)}
+}
+@keyframes legKickFront{
+  0%{transform:rotate(-25deg)}
+  50%{transform:rotate(15deg)}
+  100%{transform:rotate(0deg)}
+}
+@keyframes legKickBack{
+  0%{transform:rotate(14deg)}
+  50%{transform:rotate(-10deg)}
+  100%{transform:rotate(0deg)}
+}
+@keyframes maneWave{
+  0%,100%{transform:rotate(-4deg) scaleX(0.94)}
+  50%{transform:rotate(4deg) scaleX(1.08)}
+}
+@keyframes tailWag{
+  0%,100%{transform:rotate(-8deg) scaleX(1)}
+  50%{transform:rotate(8deg) scaleX(-1)}
+}
+@keyframes headBob{
+  0%,100%{transform:translateY(0px) rotate(0deg)}
+  50%{transform:translateY(-2px) rotate(2deg)}
+}
+@keyframes earTwitch{
+  0%,90%,100%{transform:rotate(0deg)}
+  95%{transform:rotate(-8deg)}
+}
+
+.unicorn-wrap.appearing .u-leg-fl,.unicorn-wrap.appearing .u-leg-fr{
+  animation:legKickFront 0.7s ease-out;transform-origin:top center}
+.unicorn-wrap.appearing .u-leg-bl,.unicorn-wrap.appearing .u-leg-br{
+  animation:legKickBack 0.7s ease-out 80ms;transform-origin:top center}
+
+.unicorn-wrap.visible .u-mane-part,.unicorn-wrap.appearing .u-mane-part{
+  animation:maneWave 2s infinite ease-in-out}
+.unicorn-wrap.visible .u-mane-part:nth-child(2),.unicorn-wrap.appearing .u-mane-part:nth-child(2){
+  animation-delay:0.4s}
+.unicorn-wrap.visible .u-tail,.unicorn-wrap.appearing .u-tail{
+  animation:tailWag 1.6s infinite ease-in-out;transform-origin:right center}
+.unicorn-wrap.visible .u-neck-head,.unicorn-wrap.appearing .u-neck-head{
+  animation:headBob 3s infinite ease-in-out}
+.unicorn-wrap.visible .u-ear,.unicorn-wrap.appearing .u-ear{
+  animation:earTwitch 4s infinite ease-in-out}
+
+/* ===== Grass ===== */
+#grass{position:absolute;bottom:0;left:0;width:100%;height:22%;z-index:5;pointer-events:none}
+
+/* ===== Particles ===== */
+.particle{position:absolute;font-size:18px;opacity:0;z-index:50;pointer-events:none;will-change:transform,opacity}
+.particle.active{animation:particleFly 0.65s ease-out forwards}
+@keyframes particleFly{
+  0%{opacity:1;transform:translate(0,0) scale(1)}
+  100%{opacity:0;transform:translate(calc(var(--dx)*60px),calc(var(--dy)*60px)) scale(0.3)}
+}
+
+/* ===== Score Popup ===== */
+.score-popup{position:absolute;font-size:20px;font-weight:900;color:#FFD700;
+  z-index:50;pointer-events:none;opacity:0;will-change:transform,opacity;
+  text-shadow:0 1px 3px rgba(0,0,0,0.3)}
+.score-popup.active{animation:scoreFloat 0.8s ease-out forwards}
+@keyframes scoreFloat{
+  0%{opacity:1;transform:translateY(0)}
+  100%{opacity:0;transform:translateY(-30px)}
+}
+
+/* ===== Menu Overlay ===== */
+.overlay{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;
+  justify-content:center;z-index:100;background:linear-gradient(180deg,#E0CCFA 0%,#D5F5E8 100%)}
+.overlay.active{display:flex}
+.overlay h1{font-size:clamp(28px,6vw,48px);color:#7B2FBE;margin-bottom:6px;text-align:center}
+.overlay .subtitle{font-size:16px;color:#9B59B6;margin-bottom:24px}
+
+.diff-btn{border:none;border-radius:var(--btn-radius);padding:14px 32px;font-size:16px;
+  font-weight:700;color:#fff;cursor:pointer;margin:6px;min-width:160px;
+  transition:transform 0.1s ease}
+.diff-btn:active{transform:scale(0.95)}
+.diff-easy{background:linear-gradient(135deg,#FF9FF3,#F368E0)}
+.diff-medium{background:linear-gradient(135deg,#FECA57,#FF9F43)}
+.diff-hard{background:linear-gradient(135deg,#FF6B6B,#EE5A24)}
+
+.menu-secondary{margin-top:20px;display:flex;gap:12px}
+.menu-btn{background:rgba(123,47,190,0.2);border:2px solid #9B59B6;border-radius:var(--btn-radius);
+  padding:10px 20px;font-size:14px;font-weight:600;color:#7B2FBE;cursor:pointer}
+.menu-btn:active{transform:scale(0.95)}
+
+/* ===== End Overlay ===== */
+#end-overlay .stars{font-size:36px;margin:12px 0}
+#end-overlay .final-score{font-size:28px;font-weight:900;color:#7B2FBE;margin:8px 0}
+#end-overlay .end-buttons{display:flex;gap:12px;margin-top:16px;flex-wrap:wrap;justify-content:center}
+
+/* ===== Settings Panel ===== */
+#settings-panel{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;
+  justify-content:center;z-index:200;background:rgba(224,204,250,0.97)}
+#settings-panel.active{display:flex}
+#settings-panel h2{font-size:22px;color:#7B2FBE;margin-bottom:16px}
+.setting-row{display:flex;align-items:center;gap:10px;margin:6px 0;width:min(90%,400px)}
+.setting-row label{flex:1;font-size:13px;color:#555;font-weight:600;text-align:right}
+.setting-row input[type=range]{flex:1.5;accent-color:#9B59B6}
+.setting-row .val{width:50px;font-size:13px;font-weight:700;color:#7B2FBE}
+.setting-row select{flex:1.5;font-size:14px;padding:4px;border-radius:8px;border:2px solid #9B59B6}
+#settings-close{margin-top:20px;background:#9B59B6;color:#fff;border:none;border-radius:var(--btn-radius);
+  padding:12px 32px;font-size:15px;font-weight:700;cursor:pointer}
+
+/* ===== Gold shimmer ===== */
+@keyframes goldShimmer{
+  0%,100%{opacity:0.3}50%{opacity:0.7}
+}
+.gold-overlay{animation:goldShimmer 1.5s infinite ease-in-out}
+</style>
+</head>
+<body>
+
+<!-- ===== MENU ===== -->
+<div class="overlay active" id="menu-overlay">
+  <h1>Enhjørningi 🦄</h1>
+  <p class="subtitle">Klapp enhjørningene!</p>
+  <button class="diff-btn diff-easy" data-diff="easy">Lett 🌸</button>
+  <button class="diff-btn diff-medium" data-diff="medium">Medium ⭐</button>
+  <button class="diff-btn diff-hard" data-diff="hard">Vanskelig 🔥</button>
+  <div class="menu-secondary">
+    <button class="menu-btn" id="menu-settings-btn">Innstillinger</button>
+  </div>
+</div>
+
+<!-- ===== END ===== -->
+<div class="overlay" id="end-overlay">
+  <h1>Bra jobba! 🌟</h1>
+  <div class="stars" id="end-stars"></div>
+  <div class="final-score" id="end-score"></div>
+  <div class="end-buttons">
+    <button class="diff-btn diff-easy" id="end-replay">Spill igjen 🔄</button>
+    <button class="diff-btn diff-medium" id="end-menu">Meny 🏠</button>
+    <button class="menu-btn" id="end-settings-btn">Innstillinger</button>
+  </div>
+</div>
+
+<!-- ===== GAME ===== -->
+<div id="game-frame">
+  <div id="hud">
+    <span class="hud-pill" id="score-display">Poeng: 0</span>
+    <span class="hud-pill" id="streak-display"></span>
+    <span class="hud-pill" id="time-display">1:00</span>
+    <button id="mute-btn">🔊</button>
+    <button id="quit-btn">✕</button>
+  </div>
+  <div id="cloud-grid" class="grid-3x2"></div>
+  <!-- Grass -->
+  <div id="grass">
+    <svg width="100%" height="100%" viewBox="0 0 1000 220" preserveAspectRatio="none">
+      <path d="M0 60 Q100 20 200 50 Q350 10 500 40 Q650 10 800 50 Q900 20 1000 60 L1000 220 L0 220Z" fill="#7BC67E"/>
+      <path d="M0 90 Q150 50 300 80 Q500 40 700 70 Q850 45 1000 90 L1000 220 L0 220Z" fill="#5DB85E"/>
+      <path d="M0 130 Q200 100 400 120 Q600 90 800 115 Q900 100 1000 130 L1000 220 L0 220Z" fill="#4CAF50"/>
+    </svg>
+  </div>
+  <!-- Particle pool -->
+  <div id="particle-pool"></div>
+  <!-- Score popup pool -->
+  <div id="score-pool"></div>
+</div>
+
+<!-- ===== SETTINGS ===== -->
+<div id="settings-panel">
+  <h2>Innstillinger ⚙️</h2>
+  <div class="setting-row">
+    <label>Synlighetstid</label>
+    <input type="range" id="set-visible" min="500" max="5000" step="100">
+    <span class="val" id="val-visible"></span>
+  </div>
+  <div class="setting-row">
+    <label>Spawn-intervall</label>
+    <input type="range" id="set-spawn" min="500" max="4000" step="100">
+    <span class="val" id="val-spawn"></span>
+  </div>
+  <div class="setting-row">
+    <label>Maks samtidige</label>
+    <input type="range" id="set-max" min="1" max="5" step="1">
+    <span class="val" id="val-max"></span>
+  </div>
+  <div class="setting-row">
+    <label>Spilltid</label>
+    <input type="range" id="set-time" min="30" max="120" step="10">
+    <span class="val" id="val-time"></span>
+  </div>
+  <div class="setting-row">
+    <label>Rutenett</label>
+    <select id="set-grid">
+      <option value="3x2">3 × 2 (6 skyer)</option>
+      <option value="4x3">4 × 3 (12 skyer)</option>
+    </select>
+  </div>
+  <button id="settings-close">Lukk</button>
+</div>
+
+<script>
+// ===== Konfigurasjon =====
+const DIFFICULTIES = {
+  easy:   { visibleTime:3000, spawnInterval:2000, maxActive:1, gameTime:60 },
+  medium: { visibleTime:2000, spawnInterval:1400, maxActive:2, gameTime:60 },
+  hard:   { visibleTime:1200, spawnInterval:900,  maxActive:3, gameTime:60 }
+};
+
+const VARIANTS = [
+  { name:'pink',  body:'#FFFFFF', mane:['#FF69B4','#C850C0','#7B2FBE'], cheek:'#FFB6C1' },
+  { name:'blue',  body:'#FFFFFF', mane:['#5DADE2','#48C9B0','#2ECC71'], cheek:'#B2EBF2' },
+  { name:'gold',  body:'#FFFFFF', mane:['#F7DC6F','#F0B27A','#E74C3C'], cheek:'#FDEBD0' },
+  { name:'rare',  body:'#FFF8E1', mane:['#FFD700','#FFC107','#FF9800'], cheek:'#FFE082' }
+];
+
+const EMOJIS = ['❤️','💖','⭐','✨','🌟'];
+
+// ===== Spilltilstand =====
+let config = { visibleTime:3000, spawnInterval:2000, maxActive:1, gameTime:60, grid:'3x2' };
+let score=0, streak=0, timeLeft=0, gameRunning=false, lastDifficulty='easy';
+let spawnTimer=null, gameTimer=null;
+let holes=[], activeCount=0;
+let audioCtx=null, muted=false;
+let gradientCounter=0;
+
+// ===== DOM-referanser =====
+const menuOverlay=document.getElementById('menu-overlay');
+const endOverlay=document.getElementById('end-overlay');
+const gameFrame=document.getElementById('game-frame');
+const settingsPanel=document.getElementById('settings-panel');
+const cloudGrid=document.getElementById('cloud-grid');
+const scoreDisplay=document.getElementById('score-display');
+const streakDisplay=document.getElementById('streak-display');
+const timeDisplay=document.getElementById('time-display');
+const endStars=document.getElementById('end-stars');
+const endScore=document.getElementById('end-score');
+const muteBtn=document.getElementById('mute-btn');
+const particlePool=document.getElementById('particle-pool');
+const scorePool=document.getElementById('score-pool');
+
+// ===== Partikkel-pool =====
+const particles=[];
+for(let i=0;i<20;i++){
+  const p=document.createElement('div');
+  p.className='particle';
+  particlePool.appendChild(p);
+  particles.push(p);
+}
+let particleIdx=0;
+
+// ===== Score-popup-pool =====
+const scorePopups=[];
+for(let i=0;i<8;i++){
+  const s=document.createElement('div');
+  s.className='score-popup';
+  scorePool.appendChild(s);
+  scorePopups.push(s);
+}
+let scorePopupIdx=0;
+
+// ===== SVG-generering =====
+function makeUnicornSVG(variant){
+  const v=VARIANTS[variant];
+  const gid='g'+(gradientCounter++);
+  const isRare=variant===3;
+  return `<svg viewBox="0 0 120 140" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="mn${gid}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="${v.mane[0]}"/>
+      <stop offset="50%" stop-color="${v.mane[1]}"/>
+      <stop offset="100%" stop-color="${v.mane[2]}"/>
+    </linearGradient>
+    <linearGradient id="tl${gid}" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="${v.mane[0]}"/>
+      <stop offset="100%" stop-color="${v.mane[2]}"/>
+    </linearGradient>
+    <linearGradient id="hr${gid}" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#FFD700"/>
+      <stop offset="100%" stop-color="#FFF176"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(10,15)">
+    <!-- Hale -->
+    <g class="u-tail" transform-origin="85 75">
+      <path d="M82 70 Q100 50 92 35 Q88 28 95 22 Q100 18 96 12" stroke="url(#tl${gid})" stroke-width="5" fill="none" stroke-linecap="round"/>
+      <path d="M82 72 Q105 55 97 38 Q93 30 100 25" stroke="url(#tl${gid})" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.6"/>
+    </g>
+    <!-- Bakre bein (bak kroppen) -->
+    <g class="u-leg-bl" transform-origin="65 88">
+      <path d="M62 88 Q60 105 58 118 Q57 122 60 123 L66 123 Q68 122 67 118 Q66 105 68 88" fill="${v.body}" stroke="#E0D4F5" stroke-width="0.5"/>
+    </g>
+    <g class="u-leg-br" transform-origin="75 88">
+      <path d="M72 88 Q70 105 68 118 Q67 122 70 123 L76 123 Q78 122 77 118 Q76 105 78 88" fill="${v.body}" stroke="#E0D4F5" stroke-width="0.5"/>
+    </g>
+    <!-- Kropp (torso) -->
+    <path class="u-torso" d="M30 75 Q28 60 40 55 Q55 48 70 52 Q85 56 88 70 Q90 82 85 90 Q70 98 50 96 Q35 94 30 85 Z" fill="${v.body}" stroke="#E0D4F5" stroke-width="0.8"/>
+    ${isRare?`<path class="gold-overlay" d="M30 75 Q28 60 40 55 Q55 48 70 52 Q85 56 88 70 Q90 82 85 90 Q70 98 50 96 Q35 94 30 85 Z" fill="#FFD700" opacity="0.3"/>`:''}
+    <!-- Fremre bein -->
+    <g class="u-leg-fl" transform-origin="38 88">
+      <path d="M35 88 Q33 105 31 118 Q30 122 33 123 L39 123 Q41 122 40 118 Q39 105 41 88" fill="${v.body}" stroke="#E0D4F5" stroke-width="0.5"/>
+    </g>
+    <g class="u-leg-fr" transform-origin="50 88">
+      <path d="M47 88 Q45 105 43 118 Q42 122 45 123 L51 123 Q53 122 52 118 Q51 105 53 88" fill="${v.body}" stroke="#E0D4F5" stroke-width="0.5"/>
+    </g>
+    <!-- Nakke + Hode -->
+    <g class="u-neck-head">
+      <!-- Nakke -->
+      <path d="M35 62 Q30 48 28 38 Q26 32 32 30 Q38 28 42 35 Q44 42 42 58" fill="${v.body}" stroke="#E0D4F5" stroke-width="0.5"/>
+      <!-- Hode -->
+      <path class="u-head" d="M18 28 Q12 22 14 14 Q16 8 24 6 Q32 4 38 8 Q42 12 40 20 Q38 28 32 32 Q26 34 20 32 Z" fill="${v.body}" stroke="#E0D4F5" stroke-width="0.5"/>
+      ${isRare?`<path class="gold-overlay" d="M18 28 Q12 22 14 14 Q16 8 24 6 Q32 4 38 8 Q42 12 40 20 Q38 28 32 32 Q26 34 20 32 Z" fill="#FFD700" opacity="0.3"/>`:''}
+      <!-- Øye -->
+      <circle class="u-eye" cx="24" cy="17" r="3.5" fill="#2C3E50"/>
+      <circle cx="25" cy="15.5" r="1.2" fill="#fff"/>
+      <circle cx="23" cy="18" r="0.6" fill="#fff" opacity="0.5"/>
+      <!-- Kinn -->
+      <ellipse class="u-cheek" cx="19" cy="24" rx="3.5" ry="2.5" fill="${v.cheek}" opacity="0.6"/>
+      <!-- Munn (smil) -->
+      <path d="M18 25 Q20 27.5 23 25.5" stroke="#C39BD3" stroke-width="0.8" fill="none" stroke-linecap="round"/>
+      <!-- Horn -->
+      <path class="u-horn" d="M30 8 L33 -6 L27 -6 Z" fill="url(#hr${gid})" stroke="#F9E547" stroke-width="0.3"/>
+      <!-- Spiral på horn -->
+      <path d="M29 5 L31 2 M28.5 2 L31.5 -1 M28 -1 L32 -4" stroke="#DAA520" stroke-width="0.4" fill="none" opacity="0.5"/>
+      <!-- Øre -->
+      <g class="u-ear" transform-origin="35 6">
+        <path d="M34 10 Q36 2 38 4 Q39 6 36 12" fill="${v.body}" stroke="#E0D4F5" stroke-width="0.4"/>
+        <path d="M35 9 Q36 4 37.5 5" fill="${v.mane[0]}" opacity="0.4"/>
+      </g>
+      <!-- Man -->
+      <g class="u-mane">
+        <path class="u-mane-part" d="M32 10 Q40 15 36 22 Q34 26 30 28" stroke="url(#mn${gid})" stroke-width="5" fill="none" stroke-linecap="round" transform-origin="32 10"/>
+        <path class="u-mane-part" d="M34 8 Q42 10 40 18 Q38 22 34 24" stroke="url(#mn${gid})" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.7" transform-origin="34 8"/>
+        <path class="u-mane-part" d="M33 12 Q38 18 35 25 Q33 28 28 30" stroke="url(#mn${gid})" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.5" transform-origin="33 12"/>
+      </g>
+    </g>
+  </g>
+</svg>`;
+}
+
+// ===== Grid-bygging =====
+function buildGrid(){
+  cloudGrid.innerHTML='';
+  holes=[];
+  const gridType=config.grid;
+  cloudGrid.className=gridType==='4x3'?'grid-4x3':'grid-3x2';
+  const count=gridType==='4x3'?12:6;
+  for(let i=0;i<count;i++){
+    const hole=document.createElement('div');
+    hole.className='cloud-hole';
+    hole.innerHTML=`<div class="cloud-top"><span></span></div>
+      <div class="cloud-base"><div class="unicorn-wrap"></div></div>`;
+    cloudGrid.appendChild(hole);
+    const wrap=hole.querySelector('.unicorn-wrap');
+    const variant=pickVariant();
+    wrap.innerHTML=makeUnicornSVG(variant);
+    wrap.dataset.variant=variant;
+    const holeData={el:hole,wrap:wrap,active:false,cooldown:false,variant:variant,timer:null};
+    // Touch-handler
+    const tapHandler=(e)=>{
+      e.preventDefault();
+      if(!gameRunning||!holeData.active)return;
+      onTap(holeData,e);
+    };
+    wrap.addEventListener('touchstart',tapHandler,{passive:false});
+    wrap.addEventListener('mousedown',tapHandler);
+    holes.push(holeData);
+  }
+}
+
+function pickVariant(){
+  return Math.random()<0.1?3:Math.floor(Math.random()*3);
+}
+
+// ===== Spawn-logikk =====
+function spawnUnicorn(){
+  if(!gameRunning)return;
+  if(activeCount>=config.maxActive)return;
+  const available=holes.filter(h=>!h.active&&!h.cooldown);
+  if(available.length===0)return;
+  const hole=available[Math.floor(Math.random()*available.length)];
+  hole.active=true;
+  activeCount++;
+  // Ny variant
+  const variant=pickVariant();
+  hole.variant=variant;
+  hole.wrap.innerHTML=makeUnicornSVG(variant);
+  hole.wrap.dataset.variant=variant;
+  // Animate opp
+  hole.wrap.classList.remove('hiding','visible','tapped');
+  hole.wrap.classList.add('appearing');
+  playSound('plop');
+  // Etter appear-animasjon, sett visible
+  setTimeout(()=>{
+    if(!hole.active)return;
+    hole.wrap.classList.remove('appearing');
+    hole.wrap.classList.add('visible');
+  },500);
+  // Timer for å skjule
+  hole.timer=setTimeout(()=>{
+    if(!hole.active)return;
+    hideUnicorn(hole,false);
+  },config.visibleTime);
+}
+
+function hideUnicorn(hole,tapped){
+  if(!hole.active)return;
+  hole.active=false;
+  activeCount=Math.max(0,activeCount-1);
+  clearTimeout(hole.timer);
+  hole.wrap.classList.remove('appearing','visible','tapped');
+  hole.wrap.classList.add('hiding');
+  if(!tapped){streak=0;updateStreak();}
+  // Cooldown for å la hide-animasjon fullføre
+  hole.cooldown=true;
+  setTimeout(()=>{
+    hole.wrap.classList.remove('hiding');
+    hole.cooldown=false;
+  },350);
+}
+
+// ===== Tap-handling =====
+function onTap(hole,e){
+  const isRare=hole.variant===3;
+  const points=isRare?3:1;
+  score+=points;
+  streak++;
+  scoreDisplay.textContent='Poeng: '+score;
+  updateStreak();
+  // Klapp-animasjon
+  hole.wrap.classList.add('tapped');
+  // Lyd
+  playSound(isRare?'goldPling':'pling');
+  // Partikler
+  const rect=hole.wrap.getBoundingClientRect();
+  const cx=rect.left+rect.width/2;
+  const cy=rect.top+rect.height*0.3;
+  spawnParticles(cx,cy);
+  spawnScorePopup(cx,cy,points);
+  // Skjul etter joy-bounce
+  setTimeout(()=>hideUnicorn(hole,true),350);
+}
+
+function updateStreak(){
+  if(streak>=10)streakDisplay.textContent='MAGISK! ✨ '+streak+'x';
+  else if(streak>=5)streakDisplay.textContent='Fantastisk! '+streak+'x';
+  else if(streak>=3)streakDisplay.textContent='Flott! '+streak+'x';
+  else streakDisplay.textContent='';
+}
+
+// ===== Partikler =====
+function spawnParticles(x,y){
+  for(let i=0;i<5;i++){
+    const p=particles[particleIdx%particles.length];
+    particleIdx++;
+    p.textContent=EMOJIS[Math.floor(Math.random()*EMOJIS.length)];
+    p.style.left=x+'px';
+    p.style.top=y+'px';
+    p.style.setProperty('--dx',(Math.random()*2-1).toFixed(2));
+    p.style.setProperty('--dy',(Math.random()*-1.5-0.5).toFixed(2));
+    p.classList.remove('active');
+    void p.offsetWidth; // force reflow
+    p.classList.add('active');
+  }
+}
+
+function spawnScorePopup(x,y,pts){
+  const s=scorePopups[scorePopupIdx%scorePopups.length];
+  scorePopupIdx++;
+  s.textContent='+'+pts;
+  s.style.left=x+'px';
+  s.style.top=y+'px';
+  s.classList.remove('active');
+  void s.offsetWidth;
+  s.classList.add('active');
+}
+
+// ===== Timer =====
+function startTimer(){
+  timeLeft=config.gameTime;
+  updateTimerDisplay();
+  gameTimer=setInterval(()=>{
+    timeLeft--;
+    updateTimerDisplay();
+    if(timeLeft<=0)endGame();
+  },1000);
+}
+
+function updateTimerDisplay(){
+  const m=Math.floor(timeLeft/60);
+  const s=timeLeft%60;
+  timeDisplay.textContent=m+':'+(s<10?'0':'')+s;
+}
+
+// ===== Spillflyt =====
+function startGame(difficulty){
+  lastDifficulty=difficulty;
+  const preset=DIFFICULTIES[difficulty];
+  // Merk config med preset men behold slider-verdier hvis endret
+  config.visibleTime=preset.visibleTime;
+  config.spawnInterval=preset.spawnInterval;
+  config.maxActive=preset.maxActive;
+  config.gameTime=preset.gameTime;
+  loadSettings(); // Override med evt. lagrede innstillinger
+
+  score=0;streak=0;activeCount=0;
+  scoreDisplay.textContent='Poeng: 0';
+  streakDisplay.textContent='';
+  buildGrid();
+
+  menuOverlay.classList.remove('active');
+  endOverlay.classList.remove('active');
+  gameFrame.classList.add('active');
+  gameRunning=true;
+  initAudio();
+  startTimer();
+  spawnTimer=setInterval(spawnUnicorn,config.spawnInterval);
+  spawnUnicorn();
+}
+
+function endGame(){
+  gameRunning=false;
+  clearInterval(spawnTimer);
+  clearInterval(gameTimer);
+  // Skjul alle aktive
+  holes.forEach(h=>{if(h.active)hideUnicorn(h,false);});
+  // Slutt-fanfare
+  playSound('fanfare');
+  // Vis slutt-skjerm
+  setTimeout(()=>{
+    gameFrame.classList.remove('active');
+    endOverlay.classList.add('active');
+    endScore.textContent='Poeng: '+score;
+    // Stjerner
+    let stars='';
+    if(score>=20)stars='⭐⭐⭐';
+    else if(score>=10)stars='⭐⭐';
+    else stars='⭐';
+    endStars.textContent=stars;
+  },500);
+}
+
+function quitGame(){
+  gameRunning=false;
+  clearInterval(spawnTimer);
+  clearInterval(gameTimer);
+  holes.forEach(h=>{if(h.active){h.active=false;activeCount=0;clearTimeout(h.timer);h.wrap.classList.remove('appearing','visible','tapped');h.wrap.classList.add('hiding');}});
+  gameFrame.classList.remove('active');
+  menuOverlay.classList.add('active');
+}
+
+// ===== Audio (Web Audio API) =====
+function initAudio(){
+  if(audioCtx)return;
+  try{audioCtx=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}
+}
+
+function playSound(type){
+  if(muted||!audioCtx)return;
+  try{
+    if(type==='plop'){
+      const o=audioCtx.createOscillator();
+      const g=audioCtx.createGain();
+      o.type='sine';o.frequency.setValueAtTime(200,audioCtx.currentTime);
+      o.frequency.exponentialRampToValueAtTime(600,audioCtx.currentTime+0.15);
+      g.gain.setValueAtTime(0.3,audioCtx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.01,audioCtx.currentTime+0.15);
+      o.connect(g);g.connect(audioCtx.destination);
+      o.start();o.stop(audioCtx.currentTime+0.15);
+    }else if(type==='pling'){
+      const o=audioCtx.createOscillator();
+      const g=audioCtx.createGain();
+      o.type='triangle';o.frequency.setValueAtTime(800,audioCtx.currentTime);
+      o.frequency.exponentialRampToValueAtTime(1200,audioCtx.currentTime+0.1);
+      g.gain.setValueAtTime(0.25,audioCtx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.01,audioCtx.currentTime+0.12);
+      o.connect(g);g.connect(audioCtx.destination);
+      o.start();o.stop(audioCtx.currentTime+0.12);
+    }else if(type==='goldPling'){
+      const notes=[523.25,659.25,783.99,1046.5];
+      notes.forEach((f,i)=>{
+        const o=audioCtx.createOscillator();
+        const g=audioCtx.createGain();
+        o.type='triangle';o.frequency.value=f;
+        g.gain.setValueAtTime(0.2,audioCtx.currentTime+i*0.075);
+        g.gain.exponentialRampToValueAtTime(0.01,audioCtx.currentTime+i*0.075+0.15);
+        o.connect(g);g.connect(audioCtx.destination);
+        o.start(audioCtx.currentTime+i*0.075);
+        o.stop(audioCtx.currentTime+i*0.075+0.15);
+      });
+    }else if(type==='fanfare'){
+      const melody=[392,440,523.25,587.33,659.25,783.99];
+      melody.forEach((f,i)=>{
+        const o=audioCtx.createOscillator();
+        const g=audioCtx.createGain();
+        o.type='triangle';o.frequency.value=f;
+        g.gain.setValueAtTime(0.2,audioCtx.currentTime+i*0.2);
+        g.gain.exponentialRampToValueAtTime(0.01,audioCtx.currentTime+i*0.2+0.3);
+        o.connect(g);g.connect(audioCtx.destination);
+        o.start(audioCtx.currentTime+i*0.2);
+        o.stop(audioCtx.currentTime+i*0.2+0.3);
+      });
+    }
+  }catch(e){}
+}
+
+// ===== Innstillinger =====
+function loadSettings(){
+  try{
+    const s=localStorage.getItem('unicorn_settings');
+    if(s){
+      const d=JSON.parse(s);
+      if(d.visibleTime)config.visibleTime=d.visibleTime;
+      if(d.spawnInterval)config.spawnInterval=d.spawnInterval;
+      if(d.maxActive)config.maxActive=d.maxActive;
+      if(d.gameTime)config.gameTime=d.gameTime;
+      if(d.grid)config.grid=d.grid;
+      if(d.muted!==undefined){muted=d.muted;muteBtn.textContent=muted?'🔇':'🔊';}
+    }
+  }catch(e){}
+}
+
+function saveSettings(){
+  try{
+    localStorage.setItem('unicorn_settings',JSON.stringify({
+      visibleTime:config.visibleTime,spawnInterval:config.spawnInterval,
+      maxActive:config.maxActive,gameTime:config.gameTime,grid:config.grid,muted:muted
+    }));
+  }catch(e){}
+}
+
+function openSettings(){
+  document.getElementById('set-visible').value=config.visibleTime;
+  document.getElementById('val-visible').textContent=(config.visibleTime/1000).toFixed(1)+'s';
+  document.getElementById('set-spawn').value=config.spawnInterval;
+  document.getElementById('val-spawn').textContent=(config.spawnInterval/1000).toFixed(1)+'s';
+  document.getElementById('set-max').value=config.maxActive;
+  document.getElementById('val-max').textContent=config.maxActive;
+  document.getElementById('set-time').value=config.gameTime;
+  document.getElementById('val-time').textContent=config.gameTime+'s';
+  document.getElementById('set-grid').value=config.grid;
+  settingsPanel.classList.add('active');
+}
+
+function closeSettings(){
+  config.visibleTime=parseInt(document.getElementById('set-visible').value);
+  config.spawnInterval=parseInt(document.getElementById('set-spawn').value);
+  config.maxActive=parseInt(document.getElementById('set-max').value);
+  config.gameTime=parseInt(document.getElementById('set-time').value);
+  config.grid=document.getElementById('set-grid').value;
+  saveSettings();
+  settingsPanel.classList.remove('active');
+}
+
+// Slider live-oppdatering
+['set-visible','set-spawn','set-time','set-max'].forEach(id=>{
+  const el=document.getElementById(id);
+  el.addEventListener('input',()=>{
+    const v=el.value;
+    if(id==='set-visible')document.getElementById('val-visible').textContent=(v/1000).toFixed(1)+'s';
+    else if(id==='set-spawn')document.getElementById('val-spawn').textContent=(v/1000).toFixed(1)+'s';
+    else if(id==='set-max')document.getElementById('val-max').textContent=v;
+    else if(id==='set-time')document.getElementById('val-time').textContent=v+'s';
+  });
+});
+
+// ===== Event Listeners =====
+// Meny-knapper
+document.querySelectorAll('.diff-btn[data-diff]').forEach(btn=>{
+  const handler=(e)=>{e.preventDefault();startGame(btn.dataset.diff);};
+  btn.addEventListener('touchstart',handler,{passive:false});
+  btn.addEventListener('click',handler);
+});
+
+// Quit
+const quitHandler=(e)=>{e.preventDefault();quitGame();};
+document.getElementById('quit-btn').addEventListener('touchstart',quitHandler,{passive:false});
+document.getElementById('quit-btn').addEventListener('click',quitHandler);
+
+// Mute
+const muteHandler=(e)=>{e.preventDefault();muted=!muted;muteBtn.textContent=muted?'🔇':'🔊';saveSettings();};
+muteBtn.addEventListener('touchstart',muteHandler,{passive:false});
+muteBtn.addEventListener('click',muteHandler);
+
+// Settings
+const openSettingsHandler=(e)=>{e.preventDefault();openSettings();};
+document.getElementById('menu-settings-btn').addEventListener('touchstart',openSettingsHandler,{passive:false});
+document.getElementById('menu-settings-btn').addEventListener('click',openSettingsHandler);
+document.getElementById('end-settings-btn').addEventListener('touchstart',openSettingsHandler,{passive:false});
+document.getElementById('end-settings-btn').addEventListener('click',openSettingsHandler);
+
+const closeSettingsHandler=(e)=>{e.preventDefault();closeSettings();};
+document.getElementById('settings-close').addEventListener('touchstart',closeSettingsHandler,{passive:false});
+document.getElementById('settings-close').addEventListener('click',closeSettingsHandler);
+
+// End-skjerm
+const replayHandler=(e)=>{e.preventDefault();startGame(lastDifficulty);};
+document.getElementById('end-replay').addEventListener('touchstart',replayHandler,{passive:false});
+document.getElementById('end-replay').addEventListener('click',replayHandler);
+
+const menuHandler=(e)=>{e.preventDefault();endOverlay.classList.remove('active');menuOverlay.classList.add('active');};
+document.getElementById('end-menu').addEventListener('touchstart',menuHandler,{passive:false});
+document.getElementById('end-menu').addEventListener('click',menuHandler);
+
+// Init audio på første touch
+document.addEventListener('touchstart',()=>initAudio(),{once:true,passive:true});
+
+// Last innstillinger ved oppstart
+loadSettings();
+</script>
+</body>
+</html>
